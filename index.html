@@ -1,23 +1,550 @@
-```html
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Huss Rooms</title>
-  <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Huss Rooms 💀</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;overflow:hidden;font-family:Arial,sans-serif}
+canvas{display:block}
+#hud{
+ position:fixed;top:12px;left:12px;z-index:3;
+ background:#25200acc;color:white;padding:14px 18px;
+ border-radius:14px;pointer-events:none
+}
+h1{margin:0 0 8px;color:#ffe45c;font-size:25px}
+p{margin:5px 0;font-size:13px}
+#status{color:#ffe45c;font-weight:bold}
+#crosshair{
+ position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+ color:white;font-size:25px;pointer-events:none;z-index:2
+}
+#start{
+ position:fixed;inset:0;background:#d9cb66dd;z-index:5;
+ display:flex;align-items:center;justify-content:center;text-align:center
+}
+#start button{
+ font-size:20px;padding:15px 25px;border:0;border-radius:12px;
+ background:#ffe45c;cursor:pointer;font-weight:bold
+}
+#message{
+ position:fixed;top:28%;left:50%;transform:translateX(-50%);
+ font-size:32px;font-weight:1000;color:#ffed65;
+ text-shadow:3px 3px #222;pointer-events:none;z-index:4;
+ text-align:center
+}
+</style>
 </head>
 <body>
-  <div id="hud">
-    <h1>HUSS ROOMS 💀</h1>
-    <p>WASD = Move | Mouse = Look</p>
-    <p>SHIFT = Crouch / Slide | SPACE = Throw Table</p>
-    <p id="status">Captain Clark is hunting you!</p>
-  </div>
+<div id="hud">
+ <h1>HUSS ROOMS 💀</h1>
+ <p>WASD — Move</p>
+ <p>Mouse — Look around</p>
+ <p>SHIFT — Crouch / Slide</p>
+ <p>SPACE — Throw a table</p>
+ <p id="status">10 Captain Clarks are hunting you!</p>
+</div>
+<div id="crosshair">+</div>
+<div id="message"></div>
+<div id="start">
+ <div>
+  <h1>HUSS ROOMS</h1>
+  <p>10 Captain Clarks. Infinite furniture violence.</p>
+  <p>Dodge them. Break their ankles. THROW TABLES.</p>
+  <button id="play">ENTER THE BACKROOMS</button>
+  <p>Click to play. Escape releases your mouse.</p>
+ </div>
+</div>
 
-  <div id="crosshair">+</div>
+<script type="module">
+import * as THREE from
+'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
 
-  <script type="module" src="game.js"></script>
+// =====================
+// WORLD SETUP
+// =====================
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0xe8dc83);
+scene.fog=new THREE.Fog(0xe8dc83,50,115);
+
+const camera=new THREE.PerspectiveCamera(
+ 75,innerWidth/innerHeight,0.1,160
+);
+camera.rotation.order='YXZ';
+
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth,innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.shadowMap.enabled=true;
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0xffffff,0x9b8d4b,2.2));
+const sun=new THREE.DirectionalLight(0xffffff,2);
+sun.position.set(10,25,8);
+scene.add(sun);
+
+const material=c=>new THREE.MeshStandardMaterial({color:c});
+const carpet=material(0xb7a64b);
+const wallpaper=material(0xe5d777);
+const blue=material(0x244d91);
+const skin=material(0xf0b98c);
+const black=material(0x242424);
+const wood=material(0x95602e);
+const white=material(0xffffff);
+const red=material(0xe33c35);
+
+const floor=new THREE.Mesh(
+ new THREE.PlaneGeometry(50,50),carpet
+);
+floor.rotation.x=-Math.PI/2;
+scene.add(floor);
+
+const ceiling=new THREE.Mesh(
+ new THREE.PlaneGeometry(50,50),material(0xf7f0ce)
+);
+ceiling.rotation.x=Math.PI/2;
+ceiling.position.y=4;
+scene.add(ceiling);
+
+// =====================
+// BACKROOMS MAZE
+// =====================
+const walls=[];
+
+function wall(x,z,w,d){
+ const mesh=new THREE.Mesh(
+  new THREE.BoxGeometry(w,4,d),wallpaper
+ );
+ mesh.position.set(x,2,z);
+ scene.add(mesh);
+ walls.push({x,z,w,d});
+}
+
+wall(0,-25,50,1);
+wall(0,25,50,1);
+wall(-25,0,1,50);
+wall(25,0,1,50);
+
+wall(-12,-12,1,20);
+wall(0,-16,20,1);
+wall(12,-8,1,16);
+wall(-8,4,20,1);
+wall(4,13,1,18);
+wall(-15,15,14,1);
+wall(-17,0,1,12);
+
+const lampMat=new THREE.MeshBasicMaterial({color:0xffffff});
+
+for(let x=-20;x<=20;x+=10){
+ for(let z=-20;z<=20;z+=10){
+  const panel=new THREE.Mesh(
+   new THREE.BoxGeometry(3,.1,1.5),lampMat
+  );
+  panel.position.set(x,3.93,z);
+  scene.add(panel);
+ }
+}
+
+// =====================
+// CAPTAIN CLARK MODEL
+// =====================
+function createClark(x,z,id){
+ const group=new THREE.Group();
+
+ function part(geo,mat,y,px=0,pz=0){
+  const mesh=new THREE.Mesh(geo,mat);
+  mesh.position.set(px,y,pz);
+  group.add(mesh);
+  return mesh;
+ }
+
+ // Blue business suit
+ part(new THREE.BoxGeometry(.9,1.05,.45),blue,1.15);
+
+ // White shirt and red tie
+ part(new THREE.BoxGeometry(.22,.8,.08),white,1.3,0,-.25);
+ part(new THREE.BoxGeometry(.09,.45,.08),red,1.1,0,-.31);
+
+ // Head and hair
+ part(new THREE.SphereGeometry(.38,16,12),skin,2.05);
+ part(
+  new THREE.SphereGeometry(.39,16,8,0,Math.PI*2,0,1.3),
+  black,2.22
+ );
+
+ // Eyes
+ for(const ex of [-.13,.13]){
+  part(new THREE.SphereGeometry(.06,8,8),white,2.08,ex,-.33);
+  part(new THREE.SphereGeometry(.025,8,8),black,2.08,ex,-.38);
+ }
+
+ // Arms, legs and shoes
+ for(const side of [-1,1]){
+  part(new THREE.BoxGeometry(.22,.8,.25),blue,1.25,side*.56,0);
+  part(new THREE.BoxGeometry(.25,.65,.3),blue,.3,side*.23,0);
+  part(new THREE.BoxGeometry(.25,.15,.4),black,-.05,side*.23,-.03);
+ }
+
+ group.position.set(x,0,z);
+ scene.add(group);
+
+ return {
+  group,id,stun:0,ankles:0,previousDistance:Infinity,
+  previousPosition:new THREE.Vector3(x,0,z),
+  recovering:false
+ };
+}
+
+const clarks=[];
+for(let i=0;i<10;i++){
+ const angle=i*Math.PI*2/10;
+ clarks.push(createClark(
+  Math.cos(angle)*17,Math.sin(angle)*17,i+1
+ ));
+}
+
+// =====================
+// PLAYER & CONTROLS
+// =====================
+const player=new THREE.Vector3(0,0,8);
+const keys={};
+let yaw=0,pitch=0;
+let locked=false;
+let sliding=0;
+let crouchHeight=1.05;
+let normalHeight=1.7;
+let speed=5;
+let lastSlide=0;
+let audioContext=null;
+let lastDodge=0;
+let lastMessage=0;
+
+document.getElementById('play').onclick=()=>{
+ renderer.domElement.requestPointerLock();
+};
+
+document.addEventListener('pointerlockchange',()=>{
+ locked=document.pointerLockElement===renderer.domElement;
+ document.getElementById('start').style.display=
+  locked?'none':'flex';
+
+ if(locked&&!audioContext){
+  audioContext=new (window.AudioContext||window.webkitAudioContext)();
+ }
+});
+
+document.addEventListener('mousemove',e=>{
+ if(!locked)return;
+ yaw-=e.movementX*.002;
+ pitch-=e.movementY*.002;
+ pitch=Math.max(-1.3,Math.min(1.3,pitch));
+});
+
+document.addEventListener('keydown',e=>{
+ keys[e.code]=true;
+
+ if(e.code==='Space'){
+  e.preventDefault();
+  if(!e.repeat)throwTable();
+ }
+});
+
+document.addEventListener('keyup',e=>{
+ keys[e.code]=false;
+});
+
+// =====================
+// FUNNY SOUND EFFECT
+// =====================
+function playClarkSound(){
+ if(!audioContext)return;
+
+ const osc=audioContext.createOscillator();
+ const gain=audioContext.createGain();
+ const now=audioContext.currentTime;
+
+ osc.type='triangle';
+ osc.frequency.setValueAtTime(190,now);
+ osc.frequency.exponentialRampToValueAtTime(48,now+.16);
+
+ gain.gain.setValueAtTime(.35,now);
+ gain.gain.exponentialRampToValueAtTime(.001,now+.2);
+
+ osc.connect(gain);
+ gain.connect(audioContext.destination);
+ osc.start(now);
+ osc.stop(now+.21);
+}
+
+// =====================
+// RAGDOLL EFFECT
+// =====================
+function hitClark(c){
+ if(c.stun>0)return;
+
+ c.stun=5;
+ c.ankles=0;
+ c.group.rotation.set(
+  (Math.random()-.5)*1.6,
+  c.group.rotation.y,
+  (Math.random()-.5)*2.4
+ );
+
+ // Toss him slightly sideways for a goofy knockdown
+ c.group.position.y=.25;
+ playClarkSound();
+
+ showMessage('CLARK GOT ABSOLUTELY COOKED 💀');
+}
+
+function showMessage(text){
+ const el=document.getElementById('message');
+ el.textContent=text;
+ lastMessage=2;
+}
+
+// =====================
+// THROWABLE TABLES
+// =====================
+const tables=[];
+
+function throwTable(){
+ if(!locked)return;
+
+ const table=new THREE.Group();
+
+ const top=new THREE.Mesh(
+  new THREE.BoxGeometry(1.6,.15,1),wood
+ );
+ top.position.y=.8;
+ table.add(top);
+
+ for(const x of [-.65,.65]){
+  for(const z of [-.38,.38]){
+   const leg=new THREE.Mesh(
+    new THREE.BoxGeometry(.12,.8,.12),wood
+   );
+   leg.position.set(x,.4,z);
+   table.add(leg);
+  }
+ }
+
+ const direction=new THREE.Vector3(
+  -Math.sin(yaw),0,-Math.cos(yaw)
+ );
+
+ table.position.copy(camera.position);
+ table.position.addScaledVector(direction,1.5);
+ scene.add(table);
+
+ tables.push({
+  mesh:table,
+  direction,
+  life:0
+ });
+}
+
+// =====================
+// WALL COLLISION
+// =====================
+function blocked(x,z,r=.45){
+ return walls.some(w=>
+  Math.abs(x-w.x)<w.w/2+r&&
+  Math.abs(z-w.z)<w.d/2+r
+ );
+}
+
+// =====================
+// GAME LOOP
+// =====================
+const clock=new THREE.Clock();
+
+function animate(){
+ requestAnimationFrame(animate);
+
+ const dt=Math.min(clock.getDelta(),.04);
+
+ // Player movement relative to camera direction
+ const forward=new THREE.Vector3(
+  -Math.sin(yaw),0,-Math.cos(yaw)
+ );
+ const right=new THREE.Vector3(
+  Math.cos(yaw),0,-Math.sin(yaw)
+ );
+ const movement=new THREE.Vector3();
+
+ if(keys.KeyW)movement.add(forward);
+ if(keys.KeyS)movement.sub(forward);
+ if(keys.KeyD)movement.add(right);
+ if(keys.KeyA)movement.sub(right);
+
+ const moving=movement.lengthSq()>0;
+ const shift=keys.ShiftLeft||keys.ShiftRight;
+
+ if(moving)movement.normalize();
+
+ if(shift&&moving&&sliding<=0&&performance.now()-lastSlide>800){
+  sliding=.65;
+  lastSlide=performance.now();
+ }
+
+ if(sliding>0)sliding=Math.max(0,sliding-dt);
+
+ speed=sliding>0?10:shift?2.5:5;
+
+ const nx=player.x+movement.x*speed*dt;
+ const nz=player.z+movement.z*speed*dt;
+
+ if(!blocked(nx,player.z))player.x=nx;
+ if(!blocked(player.x,nz))player.z=nz;
+
+ const low=shift||sliding>0;
+ camera.position.set(player.x,low?crouchHeight:normalHeight,player.z);
+ camera.rotation.order='YXZ';
+ camera.rotation.set(pitch,yaw,0);
+
+ // =====================
+ // THREE-DODGE ANKLE BREAKS
+ // =====================
+ for(const c of clarks){
+  if(c.stun>0)continue;
+
+  const dx=player.x-c.group.position.x;
+  const dz=player.z-c.group.position.z;
+  const distance=Math.hypot(dx,dz);
+
+  const crossed=
+   c.previousDistance<2.5&&
+   distance>c.previousDistance+.12&&
+   distance<4;
+
+  const sideways=
+   Math.abs(dx*movement.z-dz*movement.x)/
+   Math.max(distance,.01)>.45;
+
+  if(
+   sliding>0&&
+   crossed&&
+   sideways&&
+   distance<3&&
+   performance.now()-lastDodge>700
+  ){
+   c.ankles++;
+   lastDodge=performance.now();
+   playClarkSound();
+
+   showMessage('ANKLES BROKEN! '+c.ankles+'/3 😂');
+
+   if(c.ankles>=3){
+    hitClark(c);
+    showMessage('THREE ANKLE BREAKS! CLARK DOWN! 💀');
+   }
+  }
+
+  c.previousDistance=distance;
+ }
+
+ // =====================
+ // TEN CAPTAIN CLARKS CHASE YOU
+ // =====================
+ let closest=Infinity;
+
+ for(const c of clarks){
+  const g=c.group;
+  const dx=player.x-g.position.x;
+  const dz=player.z-g.position.z;
+  const distance=Math.hypot(dx,dz);
+
+  closest=Math.min(closest,distance);
+
+  if(c.stun>0){
+   c.stun-=dt;
+
+   // Simple exaggerated wobble while down
+   g.rotation.x+=dt*2;
+   g.rotation.z+=dt*2;
+   g.position.y=Math.max(0,g.position.y-dt*.5);
+
+   if(c.stun<=0){
+    g.rotation.set(0,g.rotation.y,0);
+    g.position.y=0;
+    c.ankles=0;
+    c.previousDistance=Infinity;
+   }
+   continue;
+  }
+
+  if(distance>1.25){
+   const step=2.4*dt;
+   const vx=dx/Math.max(distance,.01)*step;
+   const vz=dz/Math.max(distance,.01)*step;
+
+   if(!blocked(g.position.x+vx,g.position.z,.35)){
+    g.position.x+=vx;
+   }
+   if(!blocked(g.position.x,g.position.z+vz,.35)){
+    g.position.z+=vz;
+   }
+
+   g.rotation.y=Math.atan2(dx,dz);
+  }
+ }
+
+ // =====================
+ // TABLE HITS = INSTANT RAGDOLL
+ // =====================
+ for(let i=tables.length-1;i>=0;i--){
+  const t=tables[i];
+  t.life+=dt;
+
+  t.mesh.position.addScaledVector(t.direction,18*dt);
+  t.mesh.rotation.z+=dt*5;
+  t.mesh.rotation.x+=dt*3;
+
+  let hit=false;
+
+  for(const c of clarks){
+   if(c.stun<=0){
+    const target=c.group.position.clone();
+    target.y+=1;
+
+    if(t.mesh.position.distanceTo(target)<1.5){
+     hitClark(c);
+     hit=true;
+    }
+   }
+  }
+
+  if(hit||t.life>3||t.mesh.position.length()>60){
+   scene.remove(t.mesh);
+   tables.splice(i,1);
+  }
+ }
+
+ if(lastMessage>0){
+  lastMessage-=dt;
+  if(lastMessage<=0){
+   document.getElementById('message').textContent='';
+  }
+ }
+
+ const active=clarks.filter(c=>c.stun<=0).length;
+ document.getElementById('status').textContent=
+  active+' Clarks hunting you | Closest: '+
+  closest.toFixed(1)+'m | Tables: '+tables.length;
+
+ renderer.render(scene,camera);
+}
+
+animate();
+
+addEventListener('resize',()=>{
+ camera.aspect=innerWidth/innerHeight;
+ camera.updateProjectionMatrix();
+ renderer.setSize(innerWidth,innerHeight);
+});
+</script>
 </body>
 </html>
-```
